@@ -27,18 +27,22 @@ tr:nth-child(even) {
 /* Tablet View */
 @media (min-width: 768px) and (max-width: 991px) {
   div#map{
-        width: 900px; height: 400px;
+        width: 900px !important;
+        height: 400px !important;
  }
 }
 /* Mobile View */
 @media (max-width: 767px) {
    div#map{
-        width: 700px; height: 400px;
+        width: 700px !important;
+        height: 400px !important;
  }
+}
 }
 /* Desktop View */
 @media (min-width: 992px) {
 div#map{
-        width: 1300px; height: 400px;
+        width: 1300px !important;
+        height: 400px !important;
  }
 }
