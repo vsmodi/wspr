@@ -1,3 +1,12 @@
+"use strict";
+
+/* red pin icon */
+var RedPinIcon = L.icon({
+    iconUrl: 'red_pin.png',
+    iconSize: [25, 25],
+});
+
+
 /* The following values came from the database */
 
 var time = [];
@@ -19,10 +28,8 @@ var snr = [];
 var drift = [];
 var version = [];
 var code = [];
+var altitude = []      // Altitude is a calculated value
 
-/* Altitude is a calculated value */
-var altitude = []
-var data_count;
 
 /* Create the Power Table to Calculate the Altitude */
 /* Contains Power dBm, Power Watt, Altitude (min), Altitude (max), Altitude (avg), Altitude (ft) */
@@ -48,74 +55,120 @@ powerTable.push([57, 500,	17100,	18000   ,0,0]);
 powerTable.push([60, 1000,	18000,	18000   ,0,0]);
 
 for (var i = 0; i < powerTable.length; i++) {
+    // Since the a given values is a range of altitudes, we will average the upper and lower values
     powerTable[i][4] = Math.round((powerTable[i][2] + powerTable[i][3]) / 2)
+    // powertable is in meters, so we will convert it to ft
     powerTable[i][5] = Math.round(powerTable[i][4] * 3.28084)
 }
 
+var Reporter = "";
+var FromDate = "";
+var ToDate = "";
 
-async function GetWSPRData() {
-    "use strict";
+var wsprDataPoints;         // Number of data values from WSPR database
+var wsprSpots;               // Number of unique balloon spots
+var wsprListeners;           // Number of unique listeners
 
+async function ProcessForm() {
     // Get a reference to the form - Use the ID of the form
     var form = $("#myform");
     
       // If all of the form elements are valid, the get the form values
-    if (form.valid()) {
-        
-        var Reporter = document.getElementById("Reporter").value;
-        var FromDate = document.getElementById("FromDate").value;
-        var ToDate = document.getElementById("ToDate").value;
+    if (form.valid()) { 
+
+        document.getElementById("map").style.display = "none";  
+        document.getElementById("data").style.display = "none";  
+        if (document.getElementById("rdShowMapAndListeners").checked || document.getElementById("rdShowMap").checked) {
+            document.getElementById("map").style.display = "inline-block";              
+        }
+        if (document.getElementById("rdShowData").checked) {
+            document.getElementById("data").style.display = "inline-block";              
+        }
+
+        document.getElementById("status").innerHTML = "Retrieving Data from Database...";  
+
+        Reporter = document.getElementById("Reporter").value;
+        FromDate = document.getElementById("FromDate").value;
+        ToDate = document.getElementById("ToDate").value;
 
         /* URL for AJAX Call */
-        var myURL1 = "https://db1.wspr.live/?query=SELECT * FROM wspr.rx where tx_sign = '" + Reporter + "' and time >= '" + FromDate + "' and time <= '" + ToDate + "' ORDER BY time ASC FORMAT JSON"
+        var wsprURL = "https://db1.wspr.live/?query=SELECT * FROM wspr.rx where tx_sign = '" + Reporter + "' and time >= '" + FromDate + "' and time <= '" + ToDate + "' ORDER BY time ASC FORMAT JSON"
         /* Make the AJAX call */
-        var msg1Object = await fetch(myURL1);
+        var wsprObject = await fetch(wsprURL);
         /* Check the status */
-        if (msg1Object.status == 200) {            
-            var msg1JSONText = await msg1Object.text();
-
+        if (wsprObject.status == 200) {            
+            var wsprJSONText = await wsprObject.text();
             // Parse the JSON string into an object
-            var msg1 = JSON.parse(msg1JSONText);
+            var wsprData = JSON.parse(wsprJSONText);
 
             /* Pull the data from the message object and place it in local variables */
-            data_count = msg1.data.length;
-            for (var i = 0; i < data_count; i++) {
-                time[i] = msg1.data[i].time;
-                band[i] = msg1.data[i].band;
-                rx_sign[i] = msg1.data[i].rx_sign;
-                rx_lat[i] = msg1.data[i].rx_lat;
-                rx_lon[i] = msg1.data[i].rx_lon;
-                rx_loc[i] = msg1.data[i].rx_loc;
-                tx_sign[i] = msg1.data[i].tx_sign;
-                tx_lat[i] = msg1.data[i].tx_lat;
-                tx_lon[i] = msg1.data[i].tx_lon;
-                tx_loc[i] = msg1.data[i].tx_loc;
-                distance[i] = msg1.data[i].distance;
-                tx_azimuth[i] = msg1.data[i].azimuth;
-                rx_azimuth[i] = msg1.data[i].rx_azimuth;
-                frequency[i] = msg1.data[i].frequency;
-                power[i] = msg1.data[i].power;
-                snr[i] = msg1.data[i].snr;
-                drift[i] = msg1.data[i].drift;
-                version[i] = msg1.data[i].version;
-                code[i] = msg1.data[i].code;
-                altitude[i] = calcAltitude(power[i]);
+            wsprDataPoints = wsprData.data.length;
+            for (var i = 0; i < wsprDataPoints; i++) {
+                time[i] = wsprData.data[i].time;
+                band[i] = wsprData.data[i].band;
+                rx_sign[i] = wsprData.data[i].rx_sign;
+                rx_lat[i] = wsprData.data[i].rx_lat;
+                rx_lon[i] = wsprData.data[i].rx_lon;
+                rx_loc[i] = wsprData.data[i].rx_loc;
+                tx_sign[i] = wsprData.data[i].tx_sign;
+                tx_lat[i] = wsprData.data[i].tx_lat;
+                tx_lon[i] = wsprData.data[i].tx_lon;
+                tx_loc[i] = wsprData.data[i].tx_loc;
+                distance[i] = wsprData.data[i].distance;
+                tx_azimuth[i] = wsprData.data[i].azimuth;
+                rx_azimuth[i] = wsprData.data[i].rx_azimuth;
+                frequency[i] = wsprData.data[i].frequency;
+                power[i] = wsprData.data[i].power;
+                snr[i] = wsprData.data[i].snr;
+                drift[i] = wsprData.data[i].drift;
+                version[i] = wsprData.data[i].version;
+                code[i] = wsprData.data[i].code;
+                altitude[i] = calcAltitude(power[i]); // Calculate Altitude from power
             }
-            
-            showData();
-            showMap();            
-        }
-        else {
+            if (document.getElementById("rdShowMap").checked) {
+                document.getElementById("status").innerHTML = "Drawing Map...";  
+                showMap(false);
+                document.getElementById("status").innerHTML = "Map Complete...Datapoints: " + wsprDataPoints + "...Spots: " + wsprSpots + "...Listeners: " + wsprListeners;   
+            }            
+            if (document.getElementById("rdShowMapAndListeners").checked) {
+                document.getElementById("status").innerHTML = "Drawing Map...";  
+                showMap(true);
+                document.getElementById("status").innerHTML = "Map Complete...Datapoints: " + wsprDataPoints + "...Spots: " + wsprSpots + "...Listeners: " + wsprListeners;   
+            }            
+
+            if (document.getElementById("rdShowData").checked) {
+                document.getElementById("status").innerHTML = "Drawing Map...";  
+                showData();
+                document.getElementById("status").innerHTML = "Datapoints: " + wsprDataPoints; 
+            }            
+
+            if (document.getElementById("rdDownloadCSVData").checked) {
+                document.getElementById("status").innerHTML = "Downloading Data...";  
+                downloadCSVFile();
+                document.getElementById("status").innerHTML = "Datapoints: " + wsprDataPoints; 
+            }            
+
+            if (document.getElementById("rdDownloadJSONData").checked) {
+                document.getElementById("status").innerHTML = "Downloading Data...";  
+                downloadJSONFile();
+                document.getElementById("status").innerHTML = "Datapoints: " + wsprDataPoints; 
+            }            
+    
+        } else {
             /* AJAX complete with error */
-            alert("Error Detected - Status: " + msg1Object.status)
+            alert("Error Detected - Status: " + wsprData.status)
             return;
-        }        
+        }       
     }
 }
 
 function calcAltitude(power) {
+"use strict";
+    if (power == 0) {
+        return 0
+    }
     for (var i = 0; i < powerTable.length; i++) {
-        if (power < powerTable[i][0]) {
+        if (power < powerTable[i][1]) {
             return powerTable[i-1][5]
         }
     }
@@ -123,6 +176,7 @@ function calcAltitude(power) {
 }
 
 function showData() {
+"use strict";
 
     /* Display the table header */
     var table = "<table>";
@@ -150,7 +204,7 @@ function showData() {
     table = table + "</tr>";
             
     /* Display the table data */
-    for (var i = 0; i < data_count; i++) {
+    for (var i = 0; i < wsprDataPoints; i++) {
         table = table + "<tr>";
         table = table + "<td>" + time[i] + "</td>";
         table = table + "<td>" + band[i] + "</td>";
@@ -177,58 +231,71 @@ function showData() {
     table = table + "</table>";
             
     /* Display Table Data */
-    document.getElementById("tabledata").innerHTML = table;
+    document.getElementById("data").innerHTML = table;
 }
 
 
-function showMap() {
-    	
-
+function showMap(showListeners) {
+"use strict";
+/*  showListeners - true - show listeners on map
+    showListeners - false - do not show listeners on map
+*/
+    /* Create a map and set the center of the map to the first data point, probably the launch point */
     const map = L.map('map').setView([tx_lat[0], tx_lon[0]], 13);
 
+    /* Add streets and copyright */
 	const tiles = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 		maxZoom: 19,
 		attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
 	}).addTo(map);
     
-    const marker = [];
-    current_tx_loc = "";
-    latlon = []
-    for (var i = 0; i < data_count; i++) {
-        if (current_tx_loc != tx_loc[i]) {
-            marker.push(L.marker([tx_lat[i], tx_lon[i]]).addTo(map).bindPopup("Date:" + time[i] + ' - Altitude: ' + altitude[i]).openPopup());
-            current_tx_loc = tx_loc[i];
+    /* Marker is and array of pins on the map */
+    var marker = [];
+
+    /* Balloon track drops a once each time a balloon is heard.  Only one pin is dropped even when there are multiple listners */
+    var current_time = "";
+
+    /* Array of lat lon for each pin - used to draw polyline */
+    var balloon_latlon = [];
+
+    /* Arrays of listener callsigns - each time a pin is dropped, it is added to this array. 
+    The array is check so that multiple pins for the same location are not dropped.*/
+    var listeners = [];
+
+    for (var i = 0; i < wsprDataPoints; i++) {
+
+        /* Only place a marker if we have encountered a new time */
+        if (current_time != time[i]) {
+            marker.push(L.marker([tx_lat[i], tx_lon[i]]).addTo(map).bindTooltip("Date:" + time[i] + ' - Altitude: ' + altitude[i]));
+            current_time = time[i];
+
             /* add lat and lon to array for later polyline display */
-            latlon.push([tx_lat[i],tx_lon[i]])
+            balloon_latlon.push([tx_lat[i], tx_lon[i]]);
+
+            /* Display Listeners  */
+            /* if the call sign exists in listeners then we have already dropped a pin for the listener */
+            if (!listeners.includes(rx_sign[i])) {
+            /*  Listeners not displayed - display it */
+                if (showListeners) {
+                    marker.push(L.marker([rx_lat[i], rx_lon[i]],{icon: RedPinIcon}).addTo(map).bindTooltip(rx_sign[i]));
+                }
+                listeners.push(rx_sign[i])
+            }
         }
     }
 
     /* display lines connecting markers */
-    var polyline = L.polyline(latlon, {color: 'red'}).addTo(map);
+    var balloonpolyline = L.polyline(balloon_latlon, {color: 'red'}).addTo(map);
 
-// zoom the map to the polyline
-    map.fitBounds(polyline.getBounds());
+    /* zoom the map to the polyline */
+    map.fitBounds(balloonpolyline.getBounds());
 
-/*
-    const circle = L.circle([51.508, -0.11], {
-		color: 'red',
-		fillColor: '#f03',
-		fillOpacity: 0.5,
-		radius: 500
-	}).addTo(map).bindPopup('I am a circle.');
-
-	const polygon = L.polygon([
-		[51.509, -0.08],
-		[51.503, -0.06],
-		[51.51, -0.047]
-	]).addTo(map).bindPopup('I am a polygon.');
+    wsprSpots = balloon_latlon.length;
+    wsprListeners = listeners.length;
 
 
-	const popup = L.popup()
-		.setLatLng([51.513, -0.09])
-		.setContent('I am a standalone popup.')
-		.openOn(map);
-*/
+    /* if the user clicks on the map - display the lat/lon coordinates */
+    var popup = L.popup();
     function onMapClick(e) {
 	    popup
 		    .setLatLng(e.latlng)
@@ -238,18 +305,124 @@ function showMap() {
     map.on('click', onMapClick);
     
 }
-function ClearForm() {
-    document.getElementById("myform").reset();
-    
-    window.location.href = window.location.href;
 
-    return false; 
+function downloadCSVFile() {
+"use strict";
+
+    // https://www.javatpoint.com/oprweb/test.jsp?filename=javascript-create-and-download-csv-file1
+    //define the heading for each row of the data
+  
+    var csv = "";
+    csv = csv + "Date/Time,";
+    csv = csv + "Band,";
+    csv = csv + "RX Sign,";
+    csv = csv + "RX Lat,";
+    csv = csv + "RX Long,";
+    csv = csv + "RX Loc,";
+    csv = csv + "TX Sign,";
+    csv = csv + "TX Lat,";
+    csv = csv + "TX Long,";
+    csv = csv + "TX Loc,";
+    csv = csv + "Dist,";
+    csv = csv + "TX Azm,";
+    csv = csv + "RX Azm,";
+    csv = csv + "Freq,";
+    csv = csv + "Pwr,";
+    csv = csv + "SNR,";
+    csv = csv + "Drift,";
+    csv = csv + "Version,";
+    csv = csv + "Code,";
+    csv = csv + "Altitude";
+    csv = csv + "\n";
+            
+    /* Format the data as CSV */
+    for (var i = 0; i < wsprDataPoints; i++) {
+        csv = csv + time[i] + ",";
+        csv = csv + band[i] + ",";
+        csv = csv + rx_sign[i] + ",";
+        csv = csv + rx_lat[i] + ",";
+        csv = csv + rx_lon[i] + ",";
+        csv = csv + rx_loc[i] + ",";
+        csv = csv + tx_sign[i] + ",";
+        csv = csv + tx_lat[i] + ",";
+        csv = csv + tx_lon[i] + ",";
+        csv = csv + tx_loc[i] + ",";
+        csv = csv + distance[i] + ",";
+        csv = csv + tx_azimuth[i] + ",";
+        csv = csv + rx_azimuth[i] + ",";
+        csv = csv + frequency[i] + ",";
+        csv = csv + power[i] + ",";
+        csv = csv + snr[i] + ",";
+        csv = csv + drift[i] + ",";
+        csv = csv + version[i] + ",";
+        csv = csv + code[i] + ",";
+        csv = csv + altitude[i] + "\n";
+    }
+
+    var hiddenElement = document.createElement('a');
+    hiddenElement.href = 'data:text/csv;charset=utf-8,' + encodeURI(wsprJSONText);
+    hiddenElement.target = '_blank';
+    
+    //provide the name for the CSV file to be downloaded
+    hiddenElement.download = 'WSPRData.csv';
+    hiddenElement.click();
 }
 
-/*function ClearForm() {
+function downloadJSONFile() {
+    "use strict";
+    
+        // https://www.javatpoint.com/oprweb/test.jsp?filename=javascript-create-and-download-csv-file1
+        //define the heading for each row of the data
+      
+        var dq = '"';
+        var eol = ",";
+        var json = '[';
+                
+        /* Format the data as JSON */
+        for (var i = 0; i < wsprDataPoints; i++) {
+            json = json + '{';
+            json = json + dq + "time" + dq + ":" + dq + time[i] + dq + eol;
+            json = json + dq + "band" + dq + ":" + band[i] + eol;
+            json = json + dq + "rx_sign" + dq + ":" + dq + rx_sign[i] + dq + eol;
+            json = json + dq + "rx_lat" + dq + ":" + rx_lat[i] + eol;
+            json = json + dq + "rx_lon" + dq + ":" + rx_lon[i] + eol;
+            json = json + dq + "rx_loc" + dq + ":" + dq + rx_loc[i] + dq + eol;
+            json = json + dq + "tx_sign" + dq + ":" + dq + tx_sign[i] + dq + eol;
+            json = json + dq + "tx_lat" + dq + ":" + tx_lat[i] + eol;
+            json = json + dq + "tx_lon" + dq + ":" + tx_lon[i] + eol;
+            json = json + dq + "tx_loc" + dq + ":" + dq + tx_loc[i] + dq + eol;
+            json = json + dq + "distance" + dq + ":" + distance[i] + eol;
+            json = json + dq + "tx_azimuth" + dq + ":" + tx_azimuth[i] + eol;
+            json = json + dq + "rx_azimuth" + dq + ":" + rx_azimuth[i] + eol;
+            json = json + dq + "frequency" + dq + ":" + frequency[i] + eol;
+            json = json + dq + "power" + dq + ":" + power[i] + eol;
+            json = json + dq + "snr" + dq + ":" + snr[i] + eol;
+            json = json + dq + "drift" + dq + ":" + drift[i] + eol;
+            json = json + dq + "version" + dq + ":" + dq + version[i] + dq + eol;
+            json = json + dq + "code" + dq + ":" + code[i] + eol;
+            json = json + dq + "altitude" + dq + ":" + altitude[i];
+            json = json + "},";
+        }
+        // remove extra comma
+        json = json.substring(0, json.length - 1);
+        json = json + "]";
+
+        var x = JSON.parse(json);
+    
+        var hiddenElement = document.createElement('a');
+        hiddenElement.href = 'data:application/json;charset=utf-8,' + encodeURI(json);
+        hiddenElement.target = '_blank';
+        
+        //provide the name for the json file to be downloaded
+        hiddenElement.download = 'WSPRData.json';
+        hiddenElement.click();
+    }
+
+function ClearForm() {
+    "use strict";
+
     document.getElementById("ReporterError").innerHTML = "";
     document.getElementById("FromDateError").innerHTML = "";
     document.getElementById("ToDateError").innerHTML = "";
     document.getElementById("tabledata").innerHTML = "";    
 }
-*/
