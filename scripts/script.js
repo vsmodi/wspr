@@ -417,8 +417,15 @@ function downloadJSONFile() {
         hiddenElement.download = 'WSPRData.json';
         hiddenElement.click();
     }
-
 function ClearForm() {
+    document.getElementById("myform").reset();
+    
+    window.location.href = window.location.href;
+
+    return false; 
+}
+
+/*function ClearForm() {
     "use strict";
 
     document.getElementById("ReporterError").innerHTML = "";
@@ -426,3 +433,4 @@ function ClearForm() {
     document.getElementById("ToDateError").innerHTML = "";
     document.getElementById("tabledata").innerHTML = "";    
 }
+*/
