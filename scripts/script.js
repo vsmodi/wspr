@@ -238,10 +238,18 @@ function showMap() {
     map.on('click', onMapClick);
     
 }
-
 function ClearForm() {
+    document.getElementById("myform").reset();
+    
+    window.location.href = window.location.href;
+
+    return false; 
+}
+
+/*function ClearForm() {
     document.getElementById("ReporterError").innerHTML = "";
     document.getElementById("FromDateError").innerHTML = "";
     document.getElementById("ToDateError").innerHTML = "";
     document.getElementById("tabledata").innerHTML = "";    
 }
+*/
